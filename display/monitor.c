@@ -404,6 +404,8 @@ void monitor_backlight(uint8_t level)
 {
     SDL_SetTextureColorMod(monitor.texture, level, level, level);
     window_update(&monitor);
+    monitor.sdl_refr_qry = true;
+    monitor_sdl_refr();
 }
 
 void monitor_title(const char *title)
