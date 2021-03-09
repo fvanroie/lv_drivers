@@ -412,16 +412,4 @@ void monitor_title(const char *title)
     //  SDL_SetWindowFullscreen(monitor.window, SDL_WINDOW_FULLSCREEN_DESKTOP);
 }
 
-void monitor_backlight(uint8_t level)
-{
-    SDL_SetTextureColorMod(monitor.texture, level, level, level);
-    window_update(&monitor);
-}
-
-void monitor_title(const char *title)
-{
-    SDL_SetWindowTitle(monitor.window, title);
-    //  SDL_SetWindowFullscreen(monitor.window, SDL_WINDOW_FULLSCREEN_DESKTOP);
-}
-
 #endif /*USE_MONITOR*/
