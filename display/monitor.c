@@ -43,27 +43,30 @@
  **********************/
 typedef struct
 {
-    SDL_Window *window;
-    SDL_Renderer *renderer;
-    SDL_Texture *texture;
+    SDL_Window* window;
+    SDL_Renderer* renderer;
+    SDL_Texture* texture;
     volatile bool sdl_refr_qry;
 #if MONITOR_DOUBLE_BUFFERED
-    uint32_t *tft_fb_act;
+    uint32_t* tft_fb_act;
 #else
+    // uint32_t* tft_fb;
     uint32_t tft_fb[LV_HOR_RES_MAX * LV_VER_RES_MAX];
 #endif
+    size_t width;
+    size_t height;
 } monitor_t;
 
 /**********************
  *  STATIC PROTOTYPES
  **********************/
-static void window_create(monitor_t *m);
-static void window_update(monitor_t *m);
-int quit_filter(void *userdata, SDL_Event *event);
+static void window_create(monitor_t* m);
+static void window_update(monitor_t* m);
+int quit_filter(void* userdata, SDL_Event* event);
 static void monitor_sdl_clean_up(void);
 static void monitor_sdl_init(void);
-static void sdl_event_handler(lv_task_t *t);
-static void monitor_sdl_refr(lv_task_t *t);
+static void sdl_event_handler(lv_task_t* t);
+static void monitor_sdl_refr(lv_task_t* t);
 
 /***********************
  *   GLOBAL PROTOTYPES
@@ -78,7 +81,7 @@ monitor_t monitor;
 monitor_t monitor2;
 #endif
 
-static volatile bool sdl_inited = false;
+static volatile bool sdl_inited   = false;
 static volatile bool sdl_quit_qry = false;
 
 /**********************
@@ -92,8 +95,10 @@ static volatile bool sdl_quit_qry = false;
 /**
  * Initialize the monitor
  */
-void monitor_init(void)
+void monitor_init(size_t w, size_t h)
 {
+    monitor.width  = w;
+    monitor.height = h;
     monitor_sdl_init();
     lv_task_create(sdl_event_handler, 10, LV_TASK_PRIO_HIGH, NULL);
 }
@@ -104,7 +109,7 @@ void monitor_init(void)
  * @param area an area where to copy `color_p`
  * @param color_p an array of pixel to copy to the `area` part of the screen
  */
-void monitor_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p)
+void monitor_flush(lv_disp_drv_t* disp_drv, const lv_area_t* area, lv_color_t* color_p)
 {
     lv_coord_t hres = disp_drv->hor_res;
     lv_coord_t vres = disp_drv->ver_res;
@@ -112,31 +117,27 @@ void monitor_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *c
     //    printf("x1:%d,y1:%d,x2:%d,y2:%d\n", area->x1, area->y1, area->x2, area->y2);
 
     /*Return if the area is out the screen*/
-    if (area->x2 < 0 || area->y2 < 0 || area->x1 > hres - 1 || area->y1 > vres - 1)
-    {
+    if(area->x2 < 0 || area->y2 < 0 || area->x1 > hres - 1 || area->y1 > vres - 1) {
         lv_disp_flush_ready(disp_drv);
         return;
     }
 
 #if MONITOR_DOUBLE_BUFFERED
-    monitor.tft_fb_act = (uint32_t *)color_p;
+    monitor.tft_fb_act = (uint32_t*)color_p;
 #else                                            /*MONITOR_DOUBLE_BUFFERED*/
 
     int32_t y;
 #if LV_COLOR_DEPTH != 24 && LV_COLOR_DEPTH != 32 /*32 is valid but support 24 for backward compatibility too*/
     int32_t x;
-    for (y = area->y1; y <= area->y2 && y < disp_drv->ver_res; y++)
-    {
-        for (x = area->x1; x <= area->x2; x++)
-        {
+    for(y = area->y1; y <= area->y2 && y < disp_drv->ver_res; y++) {
+        for(x = area->x1; x <= area->x2; x++) {
             monitor.tft_fb[y * disp_drv->hor_res + x] = lv_color_to32(*color_p);
             color_p++;
         }
     }
 #else
     uint32_t w = lv_area_get_width(area);
-    for (y = area->y1; y <= area->y2 && y < disp_drv->ver_res; y++)
-    {
+    for(y = area->y1; y <= area->y2 && y < disp_drv->ver_res; y++) {
         memcpy(&monitor.tft_fb[y * MONITOR_HOR_RES + area->x1], color_p, w * sizeof(lv_color_t));
         color_p += w;
     }
@@ -147,8 +148,7 @@ void monitor_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *c
 
     /* TYPICALLY YOU DO NOT NEED THIS
      * If it was the last part to refresh update the texture of the window.*/
-    if (lv_disp_flush_is_last(disp_drv))
-    {
+    if(lv_disp_flush_is_last(disp_drv)) {
         monitor_sdl_refr(NULL);
     }
 
@@ -164,20 +164,19 @@ void monitor_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *c
  * @param area an area where to copy `color_p`
  * @param color_p an array of pixel to copy to the `area` part of the screen
  */
-void monitor_flush2(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p)
+void monitor_flush2(lv_disp_drv_t* disp_drv, const lv_area_t* area, lv_color_t* color_p)
 {
     lv_coord_t hres = disp_drv->hor_res;
     lv_coord_t vres = disp_drv->ver_res;
 
     /*Return if the area is out the screen*/
-    if (area->x2 < 0 || area->y2 < 0 || area->x1 > hres - 1 || area->y1 > vres - 1)
-    {
+    if(area->x2 < 0 || area->y2 < 0 || area->x1 > hres - 1 || area->y1 > vres - 1) {
         lv_disp_flush_ready(disp_drv);
         return;
     }
 
 #if MONITOR_DOUBLE_BUFFERED
-    monitor2.tft_fb_act = (uint32_t *)color_p;
+    monitor2.tft_fb_act = (uint32_t*)color_p;
 
     monitor2.sdl_refr_qry = true;
 
@@ -188,18 +187,15 @@ void monitor_flush2(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *
     int32_t y;
 #if LV_COLOR_DEPTH != 24 && LV_COLOR_DEPTH != 32 /*32 is valid but support 24 for backward compatibility too*/
     int32_t x;
-    for (y = area->y1; y <= area->y2 && y < disp_drv->ver_res; y++)
-    {
-        for (x = area->x1; x <= area->x2; x++)
-        {
+    for(y = area->y1; y <= area->y2 && y < disp_drv->ver_res; y++) {
+        for(x = area->x1; x <= area->x2; x++) {
             monitor2.tft_fb[y * disp_drv->hor_res + x] = lv_color_to32(*color_p);
             color_p++;
         }
     }
 #else
     uint32_t w = lv_area_get_width(area);
-    for (y = area->y1; y <= area->y2 && y < disp_drv->ver_res; y++)
-    {
+    for(y = area->y1; y <= area->y2 && y < disp_drv->ver_res; y++) {
         memcpy(&monitor2.tft_fb[y * disp_drv->hor_res + area->x1], color_p, w * sizeof(lv_color_t));
         color_p += w;
     }
@@ -209,8 +205,7 @@ void monitor_flush2(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *
 
     /* TYPICALLY YOU DO NOT NEED THIS
      * If it was the last part to refresh update the texture of the window.*/
-    if (lv_disp_flush_is_last(disp_drv))
-    {
+    if(lv_disp_flush_is_last(disp_drv)) {
         monitor_sdl_refr(NULL);
     }
 
@@ -229,14 +224,13 @@ void monitor_flush2(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *
  * It initializes SDL, handles drawing and the mouse.
  */
 
-static void sdl_event_handler(lv_task_t *t)
+static void sdl_event_handler(lv_task_t* t)
 {
     (void)t;
 
     /*Refresh handling*/
     SDL_Event event;
-    while (SDL_PollEvent(&event))
-    {
+    while(SDL_PollEvent(&event)) {
 #if USE_MOUSE != 0
         mouse_handler(&event);
 #endif
@@ -248,28 +242,25 @@ static void sdl_event_handler(lv_task_t *t)
 #if USE_KEYBOARD
         keyboard_handler(&event);
 #endif
-        if ((&event)->type == SDL_WINDOWEVENT)
-        {
-            switch ((&event)->window.event)
-            {
+        if((&event)->type == SDL_WINDOWEVENT) {
+            switch((&event)->window.event) {
 #if SDL_VERSION_ATLEAST(2, 0, 5)
-            case SDL_WINDOWEVENT_TAKE_FOCUS:
+                case SDL_WINDOWEVENT_TAKE_FOCUS:
 #endif
-            case SDL_WINDOWEVENT_EXPOSED:
-                window_update(&monitor);
+                case SDL_WINDOWEVENT_EXPOSED:
+                    window_update(&monitor);
 #if MONITOR_DUAL
-                window_update(&monitor2);
+                    window_update(&monitor2);
 #endif
-                break;
-            default:
-                break;
+                    break;
+                default:
+                    break;
             }
         }
     }
 
     /*Run until quit event not arrives*/
-    if (sdl_quit_qry)
-    {
+    if(sdl_quit_qry) {
         monitor_sdl_clean_up();
         exit(0);
     }
@@ -280,39 +271,33 @@ static void sdl_event_handler(lv_task_t *t)
  * It initializes SDL, handles drawing and the mouse.
  */
 
-static void monitor_sdl_refr(lv_task_t *t)
+static void monitor_sdl_refr(lv_task_t* t)
 {
     (void)t;
 
     /*Refresh handling*/
-    if (monitor.sdl_refr_qry != false)
-    {
+    if(monitor.sdl_refr_qry != false) {
         monitor.sdl_refr_qry = false;
         window_update(&monitor);
     }
 
 #if MONITOR_DUAL
-    if (monitor2.sdl_refr_qry != false)
-    {
+    if(monitor2.sdl_refr_qry != false) {
         monitor2.sdl_refr_qry = false;
         window_update(&monitor2);
     }
 #endif
 }
 
-int quit_filter(void *userdata, SDL_Event *event)
+int quit_filter(void* userdata, SDL_Event* event)
 {
     (void)userdata;
 
-    if (event->type == SDL_WINDOWEVENT)
-    {
-        if (event->window.event == SDL_WINDOWEVENT_CLOSE)
-        {
+    if(event->type == SDL_WINDOWEVENT) {
+        if(event->window.event == SDL_WINDOWEVENT_CLOSE) {
             sdl_quit_qry = true;
         }
-    }
-    else if (event->type == SDL_QUIT)
-    {
+    } else if(event->type == SDL_QUIT) {
         sdl_quit_qry = true;
     }
 
@@ -341,7 +326,6 @@ static void monitor_sdl_init(void)
     SDL_Init(SDL_INIT_VIDEO);
 
     SDL_SetEventFilter(quit_filter, NULL);
-
     window_create(&monitor);
 #if MONITOR_DUAL
     window_create(&monitor2);
@@ -354,34 +338,82 @@ static void monitor_sdl_init(void)
     sdl_inited = true;
 }
 
-static void window_create(monitor_t *m)
+static void window_create(monitor_t* m)
 {
-    m->window = SDL_CreateWindow("TFT Simulator",
-                                 SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                                 MONITOR_HOR_RES * MONITOR_ZOOM, MONITOR_VER_RES * MONITOR_ZOOM, 0); /*last param. SDL_WINDOW_BORDERLESS to hide borders*/
+    m->window = SDL_CreateWindow("TFT Simulator", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                                 MONITOR_HOR_RES * MONITOR_ZOOM, MONITOR_VER_RES * MONITOR_ZOOM,
+                                 0); /*last param. SDL_WINDOW_BORDERLESS to hide borders*/
 
     m->renderer = SDL_CreateRenderer(m->window, -1, SDL_RENDERER_SOFTWARE);
-    m->texture = SDL_CreateTexture(m->renderer,
-                                   SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, MONITOR_HOR_RES, MONITOR_VER_RES);
+    m->texture  = SDL_CreateTexture(m->renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, MONITOR_HOR_RES,
+                                   MONITOR_VER_RES);
     SDL_SetTextureBlendMode(m->texture, SDL_BLENDMODE_BLEND);
 
     /*Initialize the frame buffer to gray (77 is an empirical value) */
 #if MONITOR_DOUBLE_BUFFERED
     SDL_UpdateTexture(m->texture, NULL, m->tft_fb_act, MONITOR_HOR_RES * sizeof(uint32_t));
 #else
-    memset(m->tft_fb, 0x44, MONITOR_HOR_RES * MONITOR_VER_RES * sizeof(uint32_t));
+    // memset(m->tft_fb, 0xFF, MONITOR_HOR_RES * MONITOR_VER_RES * sizeof(uint32_t));
+
+    lv_color_t dark_cyan = LV_COLOR_MAKE(0x00, 0x8B, 0x8B);
+    uint32_t bg_color    = lv_color_to32(dark_cyan);
+    for(size_t y = 0; y < MONITOR_HOR_RES * MONITOR_VER_RES; y++) {
+        memcpy(&monitor.tft_fb[y], &bg_color, sizeof(uint32_t));
+    }
+
+    int logoWidth                    = 148;
+    int logoHeight                   = 20;
+    const unsigned char bootscreen[] = {
+        0x0F, 0x0F, 0xC0, 0xFF, 0x03, 0xF8, 0x7F, 0x00, 0x0F, 0x00, 0x0F, 0x80, 0x7F, 0x00, 0xFE, 0x1F, 0x00, 0xFF,
+        0x0F, 0x1F, 0x0F, 0xC0, 0xFF, 0x03, 0xF8, 0x7F, 0x00, 0x0F, 0x00, 0x0F, 0x80, 0x7F, 0x00, 0xFE, 0x1F, 0x00,
+        0xFF, 0x0F, 0x1F, 0x0F, 0xC0, 0xFF, 0x03, 0xF8, 0x7F, 0x00, 0x0F, 0x0F, 0x0F, 0x80, 0x7F, 0x00, 0xFE, 0x1F,
+        0x00, 0xFF, 0x0F, 0x1F, 0x0F, 0xC0, 0xFF, 0x03, 0xF8, 0x7F, 0x00, 0x0F, 0x0F, 0x0F, 0x80, 0x7F, 0x00, 0xFE,
+        0x1F, 0x00, 0xFF, 0x0F, 0x3F, 0x0F, 0xC0, 0x03, 0x00, 0x80, 0x07, 0x00, 0x0F, 0x0F, 0x0F, 0x00, 0x1E, 0x00,
+        0x00, 0x1E, 0x00, 0x0F, 0x00, 0x3F, 0x0F, 0xC0, 0x03, 0x00, 0x80, 0x07, 0x00, 0x0F, 0x0F, 0x0F, 0x00, 0x1E,
+        0x00, 0x00, 0x0F, 0x00, 0x0F, 0x00, 0x7F, 0x0F, 0xC0, 0x03, 0x00, 0x80, 0x07, 0x00, 0x0F, 0x0F, 0x0F, 0x00,
+        0x1E, 0x00, 0x80, 0x07, 0x00, 0x0F, 0x00, 0x7F, 0x0F, 0xC0, 0x03, 0x00, 0x80, 0x07, 0x00, 0x0F, 0x0F, 0x0F,
+        0x00, 0x1E, 0x00, 0x80, 0x07, 0x00, 0x0F, 0x00, 0xFF, 0x0F, 0xC0, 0xFF, 0x03, 0x80, 0x07, 0x00, 0x0F, 0x0F,
+        0x0F, 0x00, 0x1E, 0x00, 0xC0, 0x03, 0x00, 0xFF, 0x0F, 0xFF, 0x0F, 0xC0, 0xFF, 0x03, 0x80, 0x07, 0x00, 0x0F,
+        0x0F, 0x0F, 0x00, 0x1E, 0x00, 0xE0, 0x01, 0x00, 0xFF, 0x0F, 0xFF, 0x0F, 0xC0, 0xFF, 0x03, 0x80, 0x07, 0x00,
+        0x0F, 0x0F, 0x0F, 0x00, 0x1E, 0x00, 0xE0, 0x01, 0x00, 0xFF, 0x0F, 0xFF, 0x0F, 0xC0, 0xFF, 0x03, 0x80, 0x07,
+        0x00, 0x0F, 0x0F, 0x0F, 0x00, 0x1E, 0x00, 0xF0, 0x00, 0x00, 0xFF, 0x0F, 0xEF, 0x0F, 0xC0, 0x03, 0x00, 0x80,
+        0x07, 0x00, 0x0F, 0x0F, 0x0F, 0x00, 0x1E, 0x00, 0x78, 0x00, 0x00, 0x0F, 0x00, 0xEF, 0x0F, 0xC0, 0x03, 0x00,
+        0x80, 0x07, 0x00, 0x0F, 0x0F, 0x0F, 0x00, 0x1E, 0x00, 0x78, 0x00, 0x00, 0x0F, 0x00, 0xCF, 0x0F, 0xC0, 0x03,
+        0x00, 0x80, 0x07, 0x00, 0x0F, 0x0F, 0x0F, 0x00, 0x1E, 0x00, 0x3C, 0x00, 0x00, 0x0F, 0x00, 0xCF, 0x0F, 0xC0,
+        0x03, 0x00, 0x80, 0x07, 0x00, 0x0F, 0x0F, 0x0F, 0x00, 0x1E, 0x00, 0x1E, 0x00, 0x00, 0x0F, 0x00, 0x8F, 0x0F,
+        0xC0, 0xFF, 0x03, 0x80, 0x07, 0x00, 0xFF, 0xFF, 0x0F, 0x80, 0x7F, 0x00, 0xFE, 0x1F, 0x00, 0xFF, 0x0F, 0x8F,
+        0x0F, 0xC0, 0xFF, 0x03, 0x80, 0x07, 0x00, 0xFF, 0xFF, 0x0F, 0x80, 0x7F, 0x00, 0xFE, 0x1F, 0x00, 0xFF, 0x0F,
+        0x8F, 0x0F, 0xC0, 0xFF, 0x03, 0x80, 0x07, 0x00, 0xFE, 0xFF, 0x07, 0x80, 0x7F, 0x00, 0xFE, 0x1F, 0x00, 0xFF,
+        0x0F, 0x0F, 0x0F, 0xC0, 0xFF, 0x03, 0x80, 0x07, 0x00, 0xFC, 0xFF, 0x03, 0x80, 0x7F, 0x00, 0xFE, 0x1F, 0x00,
+        0xFF, 0x0F,
+    };
+
+    int x = (MONITOR_HOR_RES - logoWidth) / 2;
+    int y = (MONITOR_VER_RES - logoHeight) / 2;
+    // tft.drawBitmap(x, y, bootscreen, logoWidth, logoHeight, TFT_WHITE);
+
+    int32_t i, j, byteWidth = (logoWidth + 7) / 8;
+
+    bg_color = lv_color_to32(LV_COLOR_WHITE);
+    for(j = 0; j < logoHeight; j++) {
+        for(i = 0; i < logoWidth; i++) {
+            if(bootscreen[j * byteWidth + i / 8] & (1 << (i & 7))) {
+                memcpy(&monitor.tft_fb[(y + j) * MONITOR_HOR_RES + x + i], &bg_color, sizeof(uint32_t));
+            }
+        }
+    }
 #endif
 
     m->sdl_refr_qry = true;
+    window_update(m);
 }
 
-static void window_update(monitor_t *m)
+static void window_update(monitor_t* m)
 {
 #if MONITOR_DOUBLE_BUFFERED == 0
     SDL_UpdateTexture(m->texture, NULL, m->tft_fb, MONITOR_HOR_RES * sizeof(uint32_t));
 #else
-    if (m->tft_fb_act == NULL)
-        return;
+    if(m->tft_fb_act == NULL) return;
     SDL_UpdateTexture(m->texture, NULL, m->tft_fb_act, MONITOR_HOR_RES * sizeof(uint32_t));
 #endif
     SDL_RenderClear(m->renderer);
@@ -409,7 +441,7 @@ void monitor_backlight(uint8_t level)
     monitor_sdl_refr(NULL);
 }
 
-void monitor_title(const char *title)
+void monitor_title(const char* title)
 {
     SDL_SetWindowTitle(monitor.window, title);
     //  SDL_SetWindowFullscreen(monitor.window, SDL_WINDOW_FULLSCREEN_DESKTOP);
