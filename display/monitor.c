@@ -7,6 +7,7 @@
  *      INCLUDES
  *********************/
 #include "monitor.h"
+#include "bootscreen.h"
 #if USE_MONITOR
 
 #ifndef MONITOR_SDL_INCLUDE_PATH
@@ -50,8 +51,8 @@ typedef struct
 #if MONITOR_DOUBLE_BUFFERED
     uint32_t* tft_fb_act;
 #else
-    // uint32_t* tft_fb;
-    uint32_t tft_fb[LV_HOR_RES_MAX * LV_VER_RES_MAX];
+    uint32_t* tft_fb;
+    // uint32_t tft_fb[LV_HOR_RES_MAX * LV_VER_RES_MAX];
 #endif
     size_t width;
     size_t height;
@@ -99,6 +100,7 @@ void monitor_init(size_t w, size_t h)
 {
     monitor.width  = w;
     monitor.height = h;
+    monitor.tft_fb = malloc(w * h * sizeof(uint32_t));
     monitor_sdl_init();
     lv_task_create(sdl_event_handler, 10, LV_TASK_PRIO_HIGH, NULL);
 }
@@ -138,7 +140,7 @@ void monitor_flush(lv_disp_drv_t* disp_drv, const lv_area_t* area, lv_color_t* c
 #else
     uint32_t w = lv_area_get_width(area);
     for(y = area->y1; y <= area->y2 && y < disp_drv->ver_res; y++) {
-        memcpy(&monitor.tft_fb[y * MONITOR_HOR_RES + area->x1], color_p, w * sizeof(lv_color_t));
+        memcpy(&monitor.tft_fb[y * disp_drv->hor_res + area->x1], color_p, w * sizeof(lv_color_t));
         color_p += w;
     }
 #endif
@@ -317,6 +319,7 @@ static void monitor_sdl_clean_up(void)
 
 #endif
 
+    free(monitor.tft_fb);
     SDL_Quit();
 }
 
@@ -340,56 +343,46 @@ static void monitor_sdl_init(void)
 
 static void window_create(monitor_t* m)
 {
-    m->window = SDL_CreateWindow("TFT Simulator", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                                 MONITOR_HOR_RES * MONITOR_ZOOM, MONITOR_VER_RES * MONITOR_ZOOM,
-                                 0); /*last param. SDL_WINDOW_BORDERLESS to hide borders*/
+    m->window =
+        SDL_CreateWindow("TFT Simulator", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, m->width * MONITOR_ZOOM,
+                         m->height * MONITOR_ZOOM, 0); /*last param. SDL_WINDOW_BORDERLESS to hide borders*/
 
+    /* Positioning */
+    int display_index = SDL_GetWindowDisplayIndex(m->window);
+    if(display_index < 0) {
+        SDL_Log("error getting window display");
+        return;
+    }
+
+    SDL_Rect usable_bounds;
+    if(0 != SDL_GetDisplayUsableBounds(display_index, &usable_bounds)) {
+        SDL_Log("error getting usable bounds");
+        return;
+    }
+
+    SDL_SetWindowPosition(m->window, usable_bounds.w - m->width, usable_bounds.h - m->height);
+    SDL_SetWindowSize(m->window, m->width, m->height);
+
+    /* Renderer */
     m->renderer = SDL_CreateRenderer(m->window, -1, SDL_RENDERER_SOFTWARE);
-    m->texture  = SDL_CreateTexture(m->renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, MONITOR_HOR_RES,
-                                   MONITOR_VER_RES);
+    m->texture =
+        SDL_CreateTexture(m->renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, m->width, m->height);
     SDL_SetTextureBlendMode(m->texture, SDL_BLENDMODE_BLEND);
 
     /*Initialize the frame buffer to gray (77 is an empirical value) */
 #if MONITOR_DOUBLE_BUFFERED
-    SDL_UpdateTexture(m->texture, NULL, m->tft_fb_act, MONITOR_HOR_RES * sizeof(uint32_t));
+    SDL_UpdateTexture(m->texture, NULL, m->tft_fb_act, m->width * sizeof(uint32_t));
 #else
-    // memset(m->tft_fb, 0xFF, MONITOR_HOR_RES * MONITOR_VER_RES * sizeof(uint32_t));
+    // memset(m->tft_fb, 0xFF, monitor.width * monitor.height * sizeof(uint32_t));
 
     lv_color_t dark_cyan = LV_COLOR_MAKE(0x00, 0x8B, 0x8B);
     uint32_t bg_color    = lv_color_to32(dark_cyan);
-    for(size_t y = 0; y < MONITOR_HOR_RES * MONITOR_VER_RES; y++) {
+    for(size_t y = 0; y < m->width * m->height; y++) {
         memcpy(&monitor.tft_fb[y], &bg_color, sizeof(uint32_t));
     }
 
-    int logoWidth                    = 148;
-    int logoHeight                   = 20;
-    const unsigned char bootscreen[] = {
-        0x0F, 0x0F, 0xC0, 0xFF, 0x03, 0xF8, 0x7F, 0x00, 0x0F, 0x00, 0x0F, 0x80, 0x7F, 0x00, 0xFE, 0x1F, 0x00, 0xFF,
-        0x0F, 0x1F, 0x0F, 0xC0, 0xFF, 0x03, 0xF8, 0x7F, 0x00, 0x0F, 0x00, 0x0F, 0x80, 0x7F, 0x00, 0xFE, 0x1F, 0x00,
-        0xFF, 0x0F, 0x1F, 0x0F, 0xC0, 0xFF, 0x03, 0xF8, 0x7F, 0x00, 0x0F, 0x0F, 0x0F, 0x80, 0x7F, 0x00, 0xFE, 0x1F,
-        0x00, 0xFF, 0x0F, 0x1F, 0x0F, 0xC0, 0xFF, 0x03, 0xF8, 0x7F, 0x00, 0x0F, 0x0F, 0x0F, 0x80, 0x7F, 0x00, 0xFE,
-        0x1F, 0x00, 0xFF, 0x0F, 0x3F, 0x0F, 0xC0, 0x03, 0x00, 0x80, 0x07, 0x00, 0x0F, 0x0F, 0x0F, 0x00, 0x1E, 0x00,
-        0x00, 0x1E, 0x00, 0x0F, 0x00, 0x3F, 0x0F, 0xC0, 0x03, 0x00, 0x80, 0x07, 0x00, 0x0F, 0x0F, 0x0F, 0x00, 0x1E,
-        0x00, 0x00, 0x0F, 0x00, 0x0F, 0x00, 0x7F, 0x0F, 0xC0, 0x03, 0x00, 0x80, 0x07, 0x00, 0x0F, 0x0F, 0x0F, 0x00,
-        0x1E, 0x00, 0x80, 0x07, 0x00, 0x0F, 0x00, 0x7F, 0x0F, 0xC0, 0x03, 0x00, 0x80, 0x07, 0x00, 0x0F, 0x0F, 0x0F,
-        0x00, 0x1E, 0x00, 0x80, 0x07, 0x00, 0x0F, 0x00, 0xFF, 0x0F, 0xC0, 0xFF, 0x03, 0x80, 0x07, 0x00, 0x0F, 0x0F,
-        0x0F, 0x00, 0x1E, 0x00, 0xC0, 0x03, 0x00, 0xFF, 0x0F, 0xFF, 0x0F, 0xC0, 0xFF, 0x03, 0x80, 0x07, 0x00, 0x0F,
-        0x0F, 0x0F, 0x00, 0x1E, 0x00, 0xE0, 0x01, 0x00, 0xFF, 0x0F, 0xFF, 0x0F, 0xC0, 0xFF, 0x03, 0x80, 0x07, 0x00,
-        0x0F, 0x0F, 0x0F, 0x00, 0x1E, 0x00, 0xE0, 0x01, 0x00, 0xFF, 0x0F, 0xFF, 0x0F, 0xC0, 0xFF, 0x03, 0x80, 0x07,
-        0x00, 0x0F, 0x0F, 0x0F, 0x00, 0x1E, 0x00, 0xF0, 0x00, 0x00, 0xFF, 0x0F, 0xEF, 0x0F, 0xC0, 0x03, 0x00, 0x80,
-        0x07, 0x00, 0x0F, 0x0F, 0x0F, 0x00, 0x1E, 0x00, 0x78, 0x00, 0x00, 0x0F, 0x00, 0xEF, 0x0F, 0xC0, 0x03, 0x00,
-        0x80, 0x07, 0x00, 0x0F, 0x0F, 0x0F, 0x00, 0x1E, 0x00, 0x78, 0x00, 0x00, 0x0F, 0x00, 0xCF, 0x0F, 0xC0, 0x03,
-        0x00, 0x80, 0x07, 0x00, 0x0F, 0x0F, 0x0F, 0x00, 0x1E, 0x00, 0x3C, 0x00, 0x00, 0x0F, 0x00, 0xCF, 0x0F, 0xC0,
-        0x03, 0x00, 0x80, 0x07, 0x00, 0x0F, 0x0F, 0x0F, 0x00, 0x1E, 0x00, 0x1E, 0x00, 0x00, 0x0F, 0x00, 0x8F, 0x0F,
-        0xC0, 0xFF, 0x03, 0x80, 0x07, 0x00, 0xFF, 0xFF, 0x0F, 0x80, 0x7F, 0x00, 0xFE, 0x1F, 0x00, 0xFF, 0x0F, 0x8F,
-        0x0F, 0xC0, 0xFF, 0x03, 0x80, 0x07, 0x00, 0xFF, 0xFF, 0x0F, 0x80, 0x7F, 0x00, 0xFE, 0x1F, 0x00, 0xFF, 0x0F,
-        0x8F, 0x0F, 0xC0, 0xFF, 0x03, 0x80, 0x07, 0x00, 0xFE, 0xFF, 0x07, 0x80, 0x7F, 0x00, 0xFE, 0x1F, 0x00, 0xFF,
-        0x0F, 0x0F, 0x0F, 0xC0, 0xFF, 0x03, 0x80, 0x07, 0x00, 0xFC, 0xFF, 0x03, 0x80, 0x7F, 0x00, 0xFE, 0x1F, 0x00,
-        0xFF, 0x0F,
-    };
-
-    int x = (MONITOR_HOR_RES - logoWidth) / 2;
-    int y = (MONITOR_VER_RES - logoHeight) / 2;
+    int x = (m->width - logoWidth) / 2;
+    int y = (m->height - logoHeight) / 2;
     // tft.drawBitmap(x, y, bootscreen, logoWidth, logoHeight, TFT_WHITE);
 
     int32_t i, j, byteWidth = (logoWidth + 7) / 8;
@@ -398,7 +391,7 @@ static void window_create(monitor_t* m)
     for(j = 0; j < logoHeight; j++) {
         for(i = 0; i < logoWidth; i++) {
             if(bootscreen[j * byteWidth + i / 8] & (1 << (i & 7))) {
-                memcpy(&monitor.tft_fb[(y + j) * MONITOR_HOR_RES + x + i], &bg_color, sizeof(uint32_t));
+                memcpy(&monitor.tft_fb[(y + j) * m->width + x + i], &bg_color, sizeof(uint32_t));
             }
         }
     }
@@ -411,10 +404,10 @@ static void window_create(monitor_t* m)
 static void window_update(monitor_t* m)
 {
 #if MONITOR_DOUBLE_BUFFERED == 0
-    SDL_UpdateTexture(m->texture, NULL, m->tft_fb, MONITOR_HOR_RES * sizeof(uint32_t));
+    SDL_UpdateTexture(m->texture, NULL, m->tft_fb, monitor.width * sizeof(uint32_t));
 #else
     if(m->tft_fb_act == NULL) return;
-    SDL_UpdateTexture(m->texture, NULL, m->tft_fb_act, MONITOR_HOR_RES * sizeof(uint32_t));
+    SDL_UpdateTexture(m->texture, NULL, m->tft_fb_act, monitor.width * sizeof(uint32_t));
 #endif
     SDL_RenderClear(m->renderer);
 #if LV_COLOR_SCREEN_TRANSP
@@ -422,8 +415,8 @@ static void window_update(monitor_t* m)
     SDL_Rect r;
     r.x = 0;
     r.y = 0;
-    r.w = MONITOR_HOR_RES;
-    r.w = MONITOR_VER_RES;
+    r.w = m->width;
+    r.h = m->height;
     SDL_RenderDrawRect(m->renderer, &r);
 #endif
 
