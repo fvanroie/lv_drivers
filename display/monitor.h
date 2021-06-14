@@ -47,6 +47,7 @@ void monitor_flush2(lv_disp_drv_t* disp_drv, const lv_area_t* area, lv_color_t* 
 // HASP Customized functions
 void monitor_backlight(uint8_t level);
 void monitor_title(const char* title);
+void monitor_splashscreen(const uint8_t* logoImage, size_t logoWidth, size_t logoHeight, uint32_t fgColor, uint32_t bgColor);
 
 /**********************
  *      MACROS

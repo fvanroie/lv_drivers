@@ -7,7 +7,7 @@
  *      INCLUDES
  *********************/
 #include "monitor.h"
-#include "bootscreen.h"
+
 #if USE_MONITOR
 
 #ifndef MONITOR_SDL_INCLUDE_PATH
@@ -374,31 +374,30 @@ static void window_create(monitor_t* m)
     SDL_UpdateTexture(m->texture, NULL, m->tft_fb_act, m->width * sizeof(uint32_t));
 #else
     // memset(m->tft_fb, 0xFF, monitor.width * monitor.height * sizeof(uint32_t));
+#endif
+}
 
-    lv_color_t dark_cyan = LV_COLOR_MAKE(0x00, 0x8B, 0x8B);
-    uint32_t bg_color    = lv_color_to32(dark_cyan);
-    for(size_t y = 0; y < m->width * m->height; y++) {
-        memcpy(&monitor.tft_fb[y], &bg_color, sizeof(uint32_t));
+void monitor_splashscreen(const uint8_t* logoImage, size_t logoWidth, size_t logoHeight, uint32_t fgColor,
+                          uint32_t bgColor)
+{
+    for(size_t y = 0; y < monitor.width * monitor.height; y++) {
+        memcpy(&monitor.tft_fb[y], &bgColor, sizeof(uint32_t));
     }
 
-    int x = (m->width - logoWidth) / 2;
-    int y = (m->height - logoHeight) / 2;
-    // tft.drawBitmap(x, y, bootscreen, logoWidth, logoHeight, TFT_WHITE);
-
+    int x = (monitor.width - logoWidth) / 2;
+    int y = (monitor.height - logoHeight) / 2;
     int32_t i, j, byteWidth = (logoWidth + 7) / 8;
 
-    bg_color = lv_color_to32(LV_COLOR_WHITE);
     for(j = 0; j < logoHeight; j++) {
         for(i = 0; i < logoWidth; i++) {
-            if(bootscreen[j * byteWidth + i / 8] & (1 << (i & 7))) {
-                memcpy(&monitor.tft_fb[(y + j) * m->width + x + i], &bg_color, sizeof(uint32_t));
+            if(logoImage[j * byteWidth + i / 8] & (1 << (i & 7))) {
+                memcpy(&monitor.tft_fb[(y + j) * monitor.width + x + i], &fgColor, sizeof(uint32_t));
             }
         }
     }
-#endif
 
-    m->sdl_refr_qry = true;
-    window_update(m);
+    monitor.sdl_refr_qry = true;
+    window_update(&monitor);
 }
 
 static void window_update(monitor_t* m)
