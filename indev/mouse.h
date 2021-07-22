@@ -7,7 +7,8 @@
 #define MOUSE_H
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /*********************
@@ -35,22 +36,22 @@ extern "C" {
 
 #include MONITOR_SDL_INCLUDE_PATH
 
-/*********************
+    /*********************
  *      DEFINES
  *********************/
 
-/**********************
+    /**********************
  *      TYPEDEFS
  **********************/
 
-/**********************
+    /**********************
  * GLOBAL PROTOTYPES
  **********************/
 
-/**
+    /**
  * Initialize the mouse
  */
-void mouse_init(void);
+    void mouse_init(void);
 
 /**
  * Get the current position and state of the mouse
@@ -58,14 +59,18 @@ void mouse_init(void);
  * @param data store the mouse data here
  * @return false: because the points are not buffered, so no more data to be read
  */
-bool mouse_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data);
+#if LVGL_VERSION_MAJOR <= 7
+    bool mouse_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data);
+#else
+    void mouse_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data);
+#endif
 
-/**
+    /**
  * It will be called from the main SDL thread
  */
-void mouse_handler(SDL_Event *event);
+    void mouse_handler(SDL_Event *event);
 
-/**********************
+    /**********************
  *      MACROS
  **********************/
 

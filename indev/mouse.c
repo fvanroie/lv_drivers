@@ -13,7 +13,7 @@
  *      DEFINES
  *********************/
 #ifndef MONITOR_ZOOM
-#define MONITOR_ZOOM    1
+#define MONITOR_ZOOM 1
 #endif
 
 /**********************
@@ -44,7 +44,6 @@ static int16_t last_y = 0;
  */
 void mouse_init(void)
 {
-
 }
 
 /**
@@ -53,9 +52,13 @@ void mouse_init(void)
  * @param data store the mouse data here
  * @return false: because the points are not buffered, so no more data to be read
  */
-bool mouse_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data)
+#if LVGL_VERSION_MAJOR <= 7
+bool mouse_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
+#else
+void mouse_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
+#endif
 {
-    (void) indev_drv;      /*Unused*/
+    (void)indev_drv; /*Unused*/
 
     /*Store the collected data*/
     data->point.x = last_x;
@@ -68,41 +71,42 @@ bool mouse_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data)
 /**
  * It will be called from the main SDL thread
  */
-void mouse_handler(SDL_Event * event)
+void mouse_handler(SDL_Event *event)
 {
-    switch(event->type) {
-        case SDL_MOUSEBUTTONUP:
-            if(event->button.button == SDL_BUTTON_LEFT)
-                left_button_down = false;
-            break;
-        case SDL_MOUSEBUTTONDOWN:
-            if(event->button.button == SDL_BUTTON_LEFT) {
-                left_button_down = true;
-                last_x = event->motion.x / MONITOR_ZOOM;
-                last_y = event->motion.y / MONITOR_ZOOM;
-            }
-            break;
-        case SDL_MOUSEMOTION:
+    switch (event->type)
+    {
+    case SDL_MOUSEBUTTONUP:
+        if (event->button.button == SDL_BUTTON_LEFT)
+            left_button_down = false;
+        break;
+    case SDL_MOUSEBUTTONDOWN:
+        if (event->button.button == SDL_BUTTON_LEFT)
+        {
+            left_button_down = true;
             last_x = event->motion.x / MONITOR_ZOOM;
             last_y = event->motion.y / MONITOR_ZOOM;
-            break;
+        }
+        break;
+    case SDL_MOUSEMOTION:
+        last_x = event->motion.x / MONITOR_ZOOM;
+        last_y = event->motion.y / MONITOR_ZOOM;
+        break;
 
-        case SDL_FINGERUP:
-            left_button_down = false;
-            last_x = LV_HOR_RES * event->tfinger.x / MONITOR_ZOOM;
-            last_y = LV_VER_RES * event->tfinger.y / MONITOR_ZOOM;
-            break;
-        case SDL_FINGERDOWN:
-            left_button_down = true;
-            last_x = LV_HOR_RES * event->tfinger.x / MONITOR_ZOOM;
-            last_y = LV_VER_RES * event->tfinger.y / MONITOR_ZOOM;
-            break;
-        case SDL_FINGERMOTION:
-            last_x = LV_HOR_RES * event->tfinger.x / MONITOR_ZOOM;
-            last_y = LV_VER_RES * event->tfinger.y / MONITOR_ZOOM;
-            break;
+    case SDL_FINGERUP:
+        left_button_down = false;
+        last_x = LV_HOR_RES * event->tfinger.x / MONITOR_ZOOM;
+        last_y = LV_VER_RES * event->tfinger.y / MONITOR_ZOOM;
+        break;
+    case SDL_FINGERDOWN:
+        left_button_down = true;
+        last_x = LV_HOR_RES * event->tfinger.x / MONITOR_ZOOM;
+        last_y = LV_VER_RES * event->tfinger.y / MONITOR_ZOOM;
+        break;
+    case SDL_FINGERMOTION:
+        last_x = LV_HOR_RES * event->tfinger.x / MONITOR_ZOOM;
+        last_y = LV_VER_RES * event->tfinger.y / MONITOR_ZOOM;
+        break;
     }
-
 }
 
 /**********************
