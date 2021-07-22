@@ -65,7 +65,9 @@ void mouse_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
     data->point.y = last_y;
     data->state = left_button_down ? LV_INDEV_STATE_PR : LV_INDEV_STATE_REL;
 
+#if LVGL_VERSION_MAJOR <= 7
     return false;
+#endif
 }
 
 /**
