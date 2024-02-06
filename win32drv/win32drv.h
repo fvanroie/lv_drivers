@@ -63,6 +63,16 @@ EXTERN_C bool lv_win32_init(
     lv_coord_t ver_res,
     HICON icon_handle);
 
+EXTERN_C void lv_win32_set_title(
+    const char* window_title);
+
+EXTERN_C void lv_win32_splashscreen(
+    const uint8_t *logoImage,
+    size_t logoWidth,
+    size_t logoHeight,
+    uint32_t fgColor,
+    uint32_t bgColor);
+
 /**********************
  *      MACROS
  **********************/
