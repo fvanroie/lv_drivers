@@ -99,12 +99,6 @@ static void lv_win32_message_handler(
     lv_task_t* param);
 
 /**********************
- *  GLOBAL VARIABLES
- **********************/
-
-EXTERN_C bool lv_win32_quit_signal = false;
-
-/**********************
  *  STATIC VARIABLES
  **********************/
 
@@ -205,8 +199,6 @@ EXTERN_C bool lv_win32_init(
     {
         return false;
     }
-
-    lv_task_create(lv_win32_message_handler, 0, LV_TASK_PRIO_HIGHEST, NULL);
 
     lv_win32_enable_child_window_dpi_message(g_window_handle);
 
@@ -622,25 +614,6 @@ static LRESULT CALLBACK lv_win32_window_message_callback(
     }
 
     return 0;
-}
-
-static void lv_win32_message_handler(
-    lv_task_t* param)
-{
-    UNREFERENCED_PARAMETER(param);
-
-    MSG Message;
-    BOOL Result = PeekMessageW(&Message, NULL, 0, 0, TRUE);
-    if (Result != 0 && Result != -1)
-    {
-        TranslateMessage(&Message);
-        DispatchMessageW(&Message);
-
-        if (Message.message == WM_QUIT)
-        {
-            lv_win32_quit_signal = true;
-        }
-    }
 }
 
 #endif /*USE_WIN32DRV*/
