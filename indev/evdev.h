@@ -42,23 +42,20 @@ extern "C" {
  **********************/
 
 /**
- * Initialize the evdev
- */
-void evdev_init(void);
-/**
- * reconfigure the device file for evdev
+ * Initialize and register the evdev driver
  * @param dev_name set the evdev device filename
+ * @param type input device type
+ * @param indev output value for lv_indev_t
  * @return true: the device file set complete
  *         false: the device file doesn't exist current system
  */
-bool evdev_set_file(char* dev_name);
+bool evdev_register(const char* dev_name, lv_indev_type_t type, lv_indev_t** indev_p);
 /**
  * Get the current position and state of the evdev
  * @param data store the evdev data here
  * @return false: because the points are not buffered, so no more data to be read
  */
-bool evdev_read(lv_indev_drv_t * drv, lv_indev_data_t * data);
-
+bool evdev_read(lv_indev_drv_t* drv, lv_indev_data_t* data);
 
 /**********************
  *      MACROS
