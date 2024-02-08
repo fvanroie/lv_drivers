@@ -13,11 +13,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
-#if USE_BSD_EVDEV
-#include <dev/evdev/input.h>
-#else
-#include <linux/input.h>
-#endif
 
 /*********************
  *      DEFINES
@@ -26,21 +21,6 @@
 /**********************
  *      TYPEDEFS
  **********************/
-typedef struct
-{
-    int fd;
-
-    int x;
-    int y;
-
-    struct input_absinfo x_absinfo;
-    int x_max;
-    struct input_absinfo y_absinfo;
-    int y_max;
-
-    int key_val;
-    int button;
-} evdev_data_t;
 
 /**********************
  *  STATIC PROTOTYPES
@@ -131,11 +111,15 @@ bool evdev_read(lv_indev_drv_t* drv, lv_indev_data_t* data)
 
     while(read(user_data->fd, &in, sizeof(struct input_event)) > 0) {
         if(in.type == EV_REL) {
+            user_data->abs_mode = false;
+            user_data->rel_mode = true;
             if(in.code == REL_X)
                 user_data->x += in.value;
             else if(in.code == REL_Y)
                 user_data->y += in.value;
         } else if(in.type == EV_ABS) {
+            user_data->abs_mode = true;
+            user_data->rel_mode = false;
             if(in.code == ABS_X)
                 user_data->x = in.value;
             else if(in.code == ABS_Y)
@@ -189,21 +173,32 @@ bool evdev_read(lv_indev_drv_t* drv, lv_indev_data_t* data)
         return false;
     }
     if(drv->type != LV_INDEV_TYPE_POINTER) return false;
-        /*Store the collected data*/
+    /*Store the collected data*/
 
-#if EVDEV_CALIBRATE
-    int x = map(user_data->x, EVDEV_HOR_MIN, EVDEV_HOR_MAX, 0, lv_disp_get_hor_res(drv->disp));
-    int y = map(user_data->y, EVDEV_VER_MIN, EVDEV_VER_MAX, 0, lv_disp_get_ver_res(drv->disp));
-#else
+    if(user_data->rel_mode) {
+        // relative mode has no calibration/scaling - make sure it's within bounds at all times
+        if(user_data->x < 0) user_data->x = 0;
+        if(user_data->y < 0) user_data->y = 0;
+        if(user_data->x >= user_data->x_max) user_data->x = user_data->x_max - 1;
+        if(user_data->y >= user_data->y_max) user_data->y = user_data->y_max - 1;
+    }
+
     int x = user_data->x;
     int y = user_data->y;
-    if(user_data->x_absinfo.minimum || user_data->x_absinfo.maximum) {
-        x = map(x, user_data->x_absinfo.minimum, user_data->x_absinfo.maximum, 0, user_data->x_max);
-    }
-    if(user_data->y_absinfo.minimum || user_data->y_absinfo.maximum) {
-        y = map(y, user_data->y_absinfo.minimum, user_data->y_absinfo.maximum, 0, user_data->y_max);
-    }
+    if(user_data->abs_mode) {
+        // absolute mode can be calibrated or scaled automatically
+#if EVDEV_CALIBRATE
+        x = map(x, EVDEV_HOR_MIN, EVDEV_HOR_MAX, 0, user_data->x_max);
+        y = map(y, EVDEV_VER_MIN, EVDEV_VER_MAX, 0, user_data->y_max);
+#else
+        if(user_data->x_absinfo.minimum || user_data->x_absinfo.maximum) {
+            x = map(x, user_data->x_absinfo.minimum, user_data->x_absinfo.maximum, 0, user_data->x_max);
+        }
+        if(user_data->y_absinfo.minimum || user_data->y_absinfo.maximum) {
+            y = map(y, user_data->y_absinfo.minimum, user_data->y_absinfo.maximum, 0, user_data->y_max);
+        }
 #endif
+    }
 
 #if !EVDEV_SWAP_AXES
     data->point.x = x;
@@ -214,11 +209,6 @@ bool evdev_read(lv_indev_drv_t* drv, lv_indev_data_t* data)
 #endif
 
     data->state = user_data->button;
-
-    if(data->point.x < 0) data->point.x = 0;
-    if(data->point.y < 0) data->point.y = 0;
-    if(data->point.x >= user_data->x_max) data->point.x = user_data->x_max - 1;
-    if(data->point.y >= user_data->y_max) data->point.y = user_data->y_max - 1;
 
     return false;
 }

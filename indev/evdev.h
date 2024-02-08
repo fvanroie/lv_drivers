@@ -29,6 +29,12 @@ extern "C" {
 #include "lvgl/lvgl.h"
 #endif
 
+#if USE_BSD_EVDEV
+#include <dev/evdev/input.h>
+#else
+#include <linux/input.h>
+#endif
+
 /*********************
  *      DEFINES
  *********************/
@@ -36,6 +42,23 @@ extern "C" {
 /**********************
  *      TYPEDEFS
  **********************/
+typedef struct
+{
+    int fd;
+
+    int x;
+    int y;
+
+    struct input_absinfo x_absinfo;
+    int x_max;
+    struct input_absinfo y_absinfo;
+    int y_max;
+
+    int key_val;
+    int button;
+    bool abs_mode;
+    bool rel_mode;
+} evdev_data_t;
 
 /**********************
  * GLOBAL PROTOTYPES
