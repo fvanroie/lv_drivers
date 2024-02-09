@@ -124,10 +124,20 @@ bool evdev_read(lv_indev_drv_t* drv, lv_indev_data_t* data)
                 user_data->x = in.value;
             else if(in.code == ABS_Y)
                 user_data->y = in.value;
-            else if(in.code == ABS_MT_POSITION_X)
-                user_data->x = in.value;
-            else if(in.code == ABS_MT_POSITION_Y)
-                user_data->y = in.value;
+            else if(in.code == ABS_MT_SLOT)
+                user_data->mt_ignore = in.value != 1;
+            if(!user_data->mt_ignore) {
+                if(in.code == ABS_MT_POSITION_X)
+                    user_data->x = in.value;
+                else if(in.code == ABS_MT_POSITION_Y)
+                    user_data->y = in.value;
+                else if(in.code == ABS_MT_TRACKING_ID) {
+                    if(in.value > 0)
+                        user_data->button = LV_INDEV_STATE_PR;
+                    else
+                        user_data->button = LV_INDEV_STATE_REL;
+                }
+            }
         } else if(in.type == EV_KEY) {
             if(in.code == BTN_MOUSE || in.code == BTN_TOUCH) {
                 if(in.value == 0)

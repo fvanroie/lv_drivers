@@ -58,6 +58,7 @@ typedef struct
     int button;
     bool abs_mode;
     bool rel_mode;
+    bool mt_ignore;
 } evdev_data_t;
 
 /**********************
