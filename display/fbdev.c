@@ -82,10 +82,13 @@ static int fbfd            = 0;
  *   GLOBAL FUNCTIONS
  **********************/
 
-void fbdev_init(void)
+void fbdev_init(const char* fbdev_path)
 {
+    if(fbdev_path == NULL) {
+        fbdev_path = FBDEV_PATH;
+    }
     // Open the file for reading and writing
-    fbfd = open(FBDEV_PATH, O_RDWR);
+    fbfd = open(fbdev_path, O_RDWR);
     if(fbfd == -1) {
         perror("Error: cannot open framebuffer device");
         return;
