@@ -545,6 +545,8 @@ static LRESULT CALLBACK lv_win32_window_message_callback(
     WPARAM wParam,
     LPARAM lParam)
 {
+    UpdateWindow(hWnd);
+
     switch (uMsg)
     {
     case WM_MOUSEMOVE:
