@@ -99,12 +99,6 @@ static void lv_win32_message_handler(
     lv_task_t* param);
 
 /**********************
- *  GLOBAL VARIABLES
- **********************/
-
-EXTERN_C bool lv_win32_quit_signal = false;
-
-/**********************
  *  STATIC VARIABLES
  **********************/
 
@@ -125,6 +119,9 @@ static int16_t volatile g_mousewheel_value = 0;
 
 static bool volatile g_keyboard_pressed = false;
 static WPARAM volatile g_keyboard_value = 0;
+
+static lv_coord_t disp_width = 0;
+static lv_coord_t disp_height = 0;
 
 /**********************
  *      MACROS
@@ -171,6 +168,9 @@ EXTERN_C bool lv_win32_init(
     NewWindowSize.top = 0;
     NewWindowSize.bottom = ver_res - 1;
 
+    disp_width = hor_res;
+    disp_height = ver_res;
+
     AdjustWindowRectEx(
         &NewWindowSize,
         WINDOW_STYLE,
@@ -199,8 +199,6 @@ EXTERN_C bool lv_win32_init(
     {
         return false;
     }
-
-    lv_task_create(lv_win32_message_handler, 0, LV_TASK_PRIO_HIGHEST, NULL);
 
     lv_win32_enable_child_window_dpi_message(g_window_handle);
 
@@ -252,6 +250,59 @@ EXTERN_C bool lv_win32_init(
     UpdateWindow(g_window_handle);
 
     return true;
+}
+
+EXTERN_C void lv_win32_set_title(const char* window_title)
+{
+    if (g_window_handle)
+    {
+        SetWindowTextA(g_window_handle, window_title);
+    }
+}
+
+EXTERN_C void lv_win32_splashscreen(
+    const uint8_t *logoImage,
+    size_t logoWidth,
+    size_t logoHeight,
+    uint32_t fgColor,
+    uint32_t bgColor)
+{
+    for (size_t y = 0; y < disp_width * disp_height; y++)
+    {
+        memcpy(&g_pixel_buffer[y], &bgColor, sizeof(uint32_t));
+    }
+
+    int x = (disp_width - logoWidth) / 2;
+    int y = (disp_height - logoHeight) / 2;
+    int32_t i, j, byteWidth = (logoWidth + 7) / 8;
+
+    for (j = 0; j < logoHeight; j++)
+    {
+        for (i = 0; i < logoWidth; i++)
+        {
+            if (logoImage[j * byteWidth + i / 8] & (1 << (i & 7)))
+            {
+                memcpy(&g_pixel_buffer[(y + j) * disp_width + x + i], &fgColor, sizeof(uint32_t));
+            }
+        }
+    }
+
+    HDC hWindowDC = GetDC(g_window_handle);
+    if (hWindowDC)
+    {
+        BitBlt(
+            hWindowDC,
+            0,
+            0,
+            disp_width,
+            disp_height,
+            g_buffer_dc_handle,
+            0,
+            0,
+            SRCCOPY);
+
+        ReleaseDC(g_window_handle, hWindowDC);
+    }
 }
 
 /**********************
@@ -494,6 +545,8 @@ static LRESULT CALLBACK lv_win32_window_message_callback(
     WPARAM wParam,
     LPARAM lParam)
 {
+    UpdateWindow(hWnd);
+
     switch (uMsg)
     {
     case WM_MOUSEMOVE:
@@ -563,25 +616,6 @@ static LRESULT CALLBACK lv_win32_window_message_callback(
     }
 
     return 0;
-}
-
-static void lv_win32_message_handler(
-    lv_task_t* param)
-{
-    UNREFERENCED_PARAMETER(param);
-
-    MSG Message;
-    BOOL Result = PeekMessageW(&Message, NULL, 0, 0, TRUE);
-    if (Result != 0 && Result != -1)
-    {
-        TranslateMessage(&Message);
-        DispatchMessageW(&Message);
-
-        if (Message.message == WM_QUIT)
-        {
-            lv_win32_quit_signal = true;
-        }
-    }
 }
 
 #endif /*USE_WIN32DRV*/
